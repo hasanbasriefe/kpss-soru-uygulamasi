@@ -6,14 +6,18 @@ import google.generativeai as genai
 
 app = Flask(__name__)
 
+# Çevre değişkeninden API anahtarını alıyoruz
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    genai.configure(api_key=GEMINI_API_KEY.strip())
+else:
+    print("UYARI: GEMINI_API_KEY ortam değişkeni bulunamadı!")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH = os.path.join(BASE_DIR, "questions.json")
 
 def load_local_questions():
+    """Yedek JSON havuzunu güvenli biçimde okur."""
     if os.path.exists(JSON_PATH):
         try:
             with open(JSON_PATH, "r", encoding="utf-8") as f:
@@ -22,27 +26,39 @@ def load_local_questions():
             print(f"JSON Okuma Hatası: {e}")
     return []
 
-def generate_ai_questions_batch(selected_dersler, count):
+def clean_json_response(raw_text):
+    """Yapay zekanın ürettiği metindeki markdown etiketlerini temizler."""
+    text = raw_text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    return text.strip()
+
+def generate_ai_questions(selected_dersler, count):
+    """Gemini API ile KPSS Ortaöğretim seviyesinde özgün soru üretir."""
     if not GEMINI_API_KEY:
-        print("Hata: GEMINI_API_KEY bulunamadı!")
+        print("Hata: GEMINI_API_KEY tanımlanmamış!")
         return []
 
+    dersler_str = ", ".join(selected_dersler)
     prompt = f"""
-    Sen KPSS Ortaöğretim sınav komisyonu uzmanısın.
-    Aşağıdaki kurallara göre EKSİKSİZ TAM OLARAK {count} ADET soru hazırla:
+    Sen ÖSYM KPSS Ortaöğretim soru hazırlama komisyonundasın.
+    Aşağıdaki derslerden toplam tam olarak {count} adet benzersiz soru hazırla:
+    Dersler: {dersler_str}
 
-    Seçilen Dersler: {', '.join(selected_dersler)}
-    
     Kurallar:
-    1. Toplam soru sayısı kesinlikle {count} adet olmalıdır. Ne eksik ne fazla.
-    2. Sorular KPSS Ortaöğretim müfredatına uygun, 5 seçenekli (A, B, C, D, E) olmalıdır.
-    3. Güncel Bilgiler dersi için UNESCO, tarihî-kültürel yapılar, edebiyat ve güncel uluslararası konular seçilmelidir.
-    4. Her soru için açıklayıcı bir çözüm metni ekle.
+    - Kesinlikle klişe olmayan, KPSS Ortaöğretim düzeyine uygun, kaliteli sorular üret.
+    - Eğer Güncel Bilgiler dersi varsa; Türkiye ve dünya gündemi, UNESCO kültür mirası, edebiyat, sanat, tarih ve uluslararası teşkilat konularına yer ver.
+    - Her soruda 5 seçenek (A, B, C, D, E) ve tek bir doğru cevap bulunmalıdır.
+    - Her soruya doyurucu bir çözüm açıklaması ekle.
+    - SADECE aşağıdaki JSON şemasına uygun bir dizi (array) döndür. Asla fazladan metin yazma.
 
-    Yalnızca aşağıdaki şemaya uygun bir JSON dizisi (array) döndür:
+    Format Şablonu:
     [
       {{
-        "id": 1,
         "ders": "Ders Adı",
         "soru": "Soru metni",
         "secenekler": ["A) ...", "B) ...", "C) ...", "D) ...", "E) ..."],
@@ -52,21 +68,32 @@ def generate_ai_questions_batch(selected_dersler, count):
     ]
     """
 
-    try:
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            generation_config={"response_mime_type": "application/json"}
-        )
-        response = model.generate_content(prompt)
-        questions = json.loads(response.text)
-        
-        for i, q in enumerate(questions):
-            q["id"] = random.randint(10000, 99999) + i
-            
-        return questions
-    except Exception as e:
-        print(f"Gemini API Çağrısı Başarısız: {e}")
-        return []
+    # 404 hatasını önlemek için aktif modeller sırayla denenir
+    candidate_models = [
+        "gemini-1.5-flash-latest",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash"
+    ]
+
+    for model_name in candidate_models:
+        try:
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            cleaned_text = clean_json_response(response.text)
+            questions = json.loads(cleaned_text)
+
+            for i, q in enumerate(questions):
+                q["id"] = random.randint(10000, 99999) + i
+
+            print(f"Başarılı ({model_name}): {len(questions)} adet yapay zeka sorusu üretildi.")
+            return questions
+        except Exception as e:
+            print(f"Model Denemesi Başarısız ({model_name}): {e}")
+            continue
+
+    print("Hata: Hiçbir modelden geçerli soru üretilemedi.")
+    return []
 
 @app.route("/")
 def index():
@@ -75,25 +102,22 @@ def index():
 @app.route("/api/get-test", methods=["POST"])
 def get_test():
     data = request.json or {}
-    selected_dersler = data.get("dersler", [])
-    
-    # Kullanıcının seçtiği soru sayısını tam sayıya çeviriyoruz
+    selected_dersler = data.get("dersler", ["Güncel Bilgiler"])
     try:
-        total_count = int(data.get("soruSayisi", 10))
+        total_count = int(data.get("soruSayisi", 5))
     except (ValueError, TypeError):
-        total_count = 10
+        total_count = 5
 
-    # 1. Öncelik: Gemini API ile taze soru üret
-    questions = generate_ai_questions_batch(selected_dersler, total_count)
+    # 1. Öncelik: Gemini API
+    questions = generate_ai_questions(selected_dersler, total_count)
 
-    # 2. Öncelik (Yedek Plan): API çalışmazsa yerel havuzdan istenen sayıya ulaşana kadar tamamla
-    if not questions or len(questions) == 0:
-        print(f"Uyarı: API yanıt vermedi, yerel havuz kullanılıyor. İstenen adet: {total_count}")
+    # 2. Öncelik (Yedek Plan): API yanıt vermezse JSON havuzundan karşıla
+    if not questions:
+        print(f"API devre dışı kaldı; questions.json üzerinden {total_count} soru tamamlanıyor.")
         pool = load_local_questions()
         filtered = [q for q in pool if q.get("ders") in selected_dersler] or pool
 
         questions = []
-        # İstenen sayıya ulaşana kadar yerel soruları listeye ekle
         while len(questions) < total_count and filtered:
             item = random.choice(filtered).copy()
             item["id"] = random.randint(1000, 9999)
