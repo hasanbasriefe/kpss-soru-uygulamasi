@@ -2,22 +2,23 @@ import os
 import json
 import random
 from flask import Flask, render_template, request, jsonify
-import google.generativeai as genai
+from google import genai
 
 app = Flask(__name__)
 
-# Çevre değişkeninden API anahtarını alıyoruz
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+client = None
+
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY.strip())
-else:
-    print("UYARI: GEMINI_API_KEY ortam değişkeni bulunamadı!")
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY.strip())
+    except Exception as e:
+        print(f"Client başlatma hatası: {e}")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH = os.path.join(BASE_DIR, "questions.json")
 
 def load_local_questions():
-    """Yedek JSON havuzunu güvenli biçimde okur."""
     if os.path.exists(JSON_PATH):
         try:
             with open(JSON_PATH, "r", encoding="utf-8") as f:
@@ -27,7 +28,6 @@ def load_local_questions():
     return []
 
 def clean_json_response(raw_text):
-    """Yapay zekanın ürettiği metindeki markdown etiketlerini temizler."""
     text = raw_text.strip()
     if text.startswith("```json"):
         text = text[7:]
@@ -38,48 +38,43 @@ def clean_json_response(raw_text):
     return text.strip()
 
 def generate_ai_questions(selected_dersler, count):
-    """Gemini API ile KPSS Ortaöğretim seviyesinde özgün soru üretir."""
-    if not GEMINI_API_KEY:
-        print("Hata: GEMINI_API_KEY tanımlanmamış!")
+    if not client:
+        print("API Hatası: Client veya API Anahtarı aktif değil.")
         return []
 
     dersler_str = ", ".join(selected_dersler)
     prompt = f"""
     Sen ÖSYM KPSS Ortaöğretim soru hazırlama komisyonundasın.
-    Aşağıdaki derslerden toplam tam olarak {count} adet benzersiz soru hazırla:
+    Aşağıdaki derslerden toplam tam olarak {count} adet benzersiz ve kaliteli soru hazırla:
     Dersler: {dersler_str}
 
     Kurallar:
-    - Kesinlikle klişe olmayan, KPSS Ortaöğretim düzeyine uygun, kaliteli sorular üret.
-    - Eğer Güncel Bilgiler dersi varsa; Türkiye ve dünya gündemi, UNESCO kültür mirası, edebiyat, sanat, tarih ve uluslararası teşkilat konularına yer ver.
-    - Her soruda 5 seçenek (A, B, C, D, E) ve tek bir doğru cevap bulunmalıdır.
-    - Her soruya doyurucu bir çözüm açıklaması ekle.
-    - SADECE aşağıdaki JSON şemasına uygun bir dizi (array) döndür. Asla fazladan metin yazma.
+    - Klişe olmayan, özgün ve KPSS Ortaöğretim düzeyinde sorular üret.
+    - Eğer Güncel Bilgiler varsa; Türkiye ve dünya gündemi, UNESCO kültür varlıkları, edebiyat, sanat ve spor gelişmelerinden sor.
+    - 5 seçenek (A, B, C, D, E) ve tek bir doğru cevap olsun.
+    - Yanıtı SADECE geçerli bir JSON dizisi (array) olarak döndür. Markdown etiketleri dışında hiçbir metin yazma.
 
     Format Şablonu:
     [
       {{
         "ders": "Ders Adı",
-        "soru": "Soru metni",
+        "soru": "Soru metni...",
         "secenekler": ["A) ...", "B) ...", "C) ...", "D) ...", "E) ..."],
         "dogruCevap": "A",
-        "cozum": "Çözüm açıklaması"
+        "cozum": "Açıklayıcı gerekçe..."
       }}
     ]
     """
 
-    # 404 hatasını önlemek için aktif modeller sırayla denenir
-    candidate_models = [
-        "gemini-1.5-flash-latest",
-        "gemini-2.0-flash",
-        "gemini-1.5-pro",
-        "gemini-1.5-flash"
-    ]
+    # Hata çıktısında belirtilen güncel modeller:
+    models_to_try = ["gemini-2.5-flash", "gemini-2.5-pro"]
 
-    for model_name in candidate_models:
+    for model_name in models_to_try:
         try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
             cleaned_text = clean_json_response(response.text)
             questions = json.loads(cleaned_text)
 
@@ -89,10 +84,9 @@ def generate_ai_questions(selected_dersler, count):
             print(f"Başarılı ({model_name}): {len(questions)} adet yapay zeka sorusu üretildi.")
             return questions
         except Exception as e:
-            print(f"Model Denemesi Başarısız ({model_name}): {e}")
+            print(f"{model_name} denenirken hata: {e}")
             continue
 
-    print("Hata: Hiçbir modelden geçerli soru üretilemedi.")
     return []
 
 @app.route("/")
@@ -105,18 +99,15 @@ def get_test():
     selected_dersler = data.get("dersler", ["Güncel Bilgiler"])
     try:
         total_count = int(data.get("soruSayisi", 5))
-    except (ValueError, TypeError):
+    except:
         total_count = 5
 
-    # 1. Öncelik: Gemini API
     questions = generate_ai_questions(selected_dersler, total_count)
 
-    # 2. Öncelik (Yedek Plan): API yanıt vermezse JSON havuzundan karşıla
     if not questions:
         print(f"API devre dışı kaldı; questions.json üzerinden {total_count} soru tamamlanıyor.")
         pool = load_local_questions()
         filtered = [q for q in pool if q.get("ders") in selected_dersler] or pool
-
         questions = []
         while len(questions) < total_count and filtered:
             item = random.choice(filtered).copy()
