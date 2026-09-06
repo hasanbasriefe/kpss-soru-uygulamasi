@@ -1,0 +1,72 @@
+[
+  {
+    "id": 1,
+    "ders": "Türkçe",
+    "soru": "Aşağıdaki cümlelerin hangisinde bir yazım yanlışı yapılmıştır?",
+    "secenekler": [
+      "A) Bu konuda herkesin fikir birliğine varması bekleniyor.",
+      "B) Hafta sonu yapılacak toplantı saat 14.00'te başlayacak.",
+      "C) Birçok öğrenci bu yıl kütüphanelerden daha fazla yararlandı.",
+      "D) Olayın ardındaki gerçekler bir türlü gün yüzüne çıkmadı.",
+      "E) Baş başa verip bu meseleyi akşama kadar çözmeliyiz."
+    ],
+    "dogruCevap": "D",
+    "cozum": "'Gün yüzü' sözcüğü Türk Dil Kurumu'na göre ayrı yazılır ('gün yüzüne çıkmak')."
+  },
+  {
+    "id": 2,
+    "ders": "Tarih",
+    "soru": "Osmanlı Devleti'nde ilk düzenli ordu teşkilatı (Yaya ve Müsellem) hangi padişah döneminde kurulmuştur?",
+    "secenekler": [
+      "A) Osman Bey",
+      "B) Orhan Bey",
+      "C) I. Murad",
+      "D) Çelebi Mehmed",
+      "E) Fatih Sultan Mehmed"
+    ],
+    "dogruCevap": "B",
+    "cozum": "Yaya ve Müsellem teşkilatı, fetihlerin genişlemesiyle birlikte Orhan Gazi döneminde kurulmuştur."
+  },
+  {
+    "id": 3,
+    "ders": "Coğrafya",
+    "soru": "Türkiye'de kalker, jips ve kaya tuzu gibi eriyebilen kayaçların yaygın olduğu alanlarda oluşan karstik şekillere en çok hangi bölgede rastlanır?",
+    "secenekler": [
+      "A) Karadeniz Bölgesi",
+      "B) Akdeniz Bölgesi",
+      "C) Güneydoğu Anadolu Bölgesi",
+      "D) Doğu Anadolu Bölgesi",
+      "E) Marmara Bölgesi"
+    ],
+    "dogruCevap": "B",
+    "cozum": "Karstik araziler ve mağara, obruk, lapyalar en fazla kireç taşı (kalker) zengini Akdeniz Bölgesi'nde (özellikle Teke ve Taşeli platolarında) görülür."
+  },
+  {
+    "id": 4,
+    "ders": "Vatandaşlık",
+    "soru": "1982 Anayasası'na göre Türkiye Büyük Millet Meclisi genel seçimleri kaç yılda bir yapılır?",
+    "secenekler": [
+      "A) 3",
+      "B) 4",
+      "C) 5",
+      "D) 6",
+      "E) 7"
+    ],
+    "dogruCevap": "C",
+    "cozum": "2017 anayasa değişikliği ile TBMM ve Cumhurbaşkanlığı seçimleri 5 yılda bir aynı gün yapılır."
+  },
+  {
+    "id": 5,
+    "ders": "Güncel Bilgiler",
+    "soru": "Birleşmiş Milletler Eğitim, Bilim ve Kültür Örgütü (UNESCO) Dünya Mirası Listesi'nde yer alan Göbeklitepe arkeolojik alanı hangi ilimiz sınırları içerisindedir?",
+    "secenekler": [
+      "A) Gaziantep",
+      "B) Mardin",
+      "C) Adıyaman",
+      "D) Şanlıurfa",
+      "E) Diyarbakır"
+    ],
+    "dogruCevap": "D",
+    "cozum": "Tarihin sıfır noktası olarak adlandırılan Göbeklitepe, Şanlıurfa il merkezinin kuzeydoğusunda yer almaktadır."
+  }
+]
