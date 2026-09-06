@@ -2,8 +2,16 @@ import os
 import json
 import random
 from flask import Flask, render_template, request, jsonify
+import google.generativeai as genai
 
-# app.py dosyasının bulunduğu tam klasör yolunu garantiye alıyoruz
+app = Flask(__name__)
+
+# Render veya yerel ortamdan API anahtarını alıyoruz
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH = os.path.join(BASE_DIR, "questions.json")
 
@@ -14,36 +22,64 @@ def load_local_questions():
                 return json.load(f)
         except Exception as e:
             print(f"JSON Okuma Hatası: {e}")
-            return []
-    print(f"Uyarı: {JSON_PATH} dosya konumunda questions.json bulunamadı!")
     return []
 
-app = Flask(__name__)
-
-# Yerel havuzu yükle
-def load_local_questions():
-    if os.path.exists("questions.json"):
-        with open("questions.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
-
-# Yapay zeka ile dinamik soru üreten fonksiyon (İhtiyaç halinde tetiklenir)
-def generate_ai_question(ders):
+def generate_ai_questions_batch(selected_dersler, count):
     """
-    Yerel sorular bittiğinde Gemini API çağrısı ile KPSS formatında
-    dinamik soru üreten şablon fonksiyon.
+    Seçilen derslerden belirlenen adette KPSS Ortaöğretim formatında
+    gerçek ve kaliteli soruları Gemini API ile tek seferde üretir.
     """
-    # API Entegrasyonu örneği:
-    # prompt = f"KPSS Ortaöğretim seviyesinde {ders} dersinden 5 şıklı, tek doğru cevaplı ve çözümlü bir soru üret."
-    # Dönen cevabı JSON formatında ayrıştırıp listeye ekler.
-    return {
-        "id": random.randint(1000, 9999),
-        "ders": ders,
-        "soru": f"[{ders} - Dinamik Soru] Aşağıdakilerden hangisi bu dersin temel ilkelerindendir?",
-        "secenekler": ["A) Tanım 1", "B) Tanım 2", "C) Tanım 3", "D) Tanım 4", "E) Tanım 5"],
+    if not GEMINI_API_KEY:
+        return []
+
+    prompt = f"""
+    Sen ÖSYM standartlarında soru hazırlayan kıdemli bir KPSS Ortaöğretim komisyon uzmanısın.
+    Aşağıdaki kurallara göre tam olarak {count} adet soru hazırla.
+
+    Seçilen Dersler: {', '.join(selected_dersler)}
+    
+    Özel Kurallar:
+    1. Sorular KPSS Ortaöğretim seviyesine ve ÖSYM'nin soru mantığına kesinlikle uygun olmalıdır.
+    2. Seçenekler 5 şıklı (A, B, C, D, E) olmalı, sadece tek bir doğru cevap bulunmalıdır.
+    3. Eğer seçilen dersler arasında 'Güncel Bilgiler' varsa; UNESCO Dünya Mirası listeleri, uluslararası kuruluşlar, önemli edebiyat/sanat eserleri, bilim-uzay gelişmeleri ve genel kültür konularından soru üret. Asla uydurma veya 'tanım' gibi jenerik ifadeler kullanma.
+    4. Her soru için doyurucu, öğretici bir çözüm gerekçesi yaz.
+    5. Ürettiğin soruları seçilen derslere dengeli biçimde dağıt.
+
+    Cevabını yalnızca ve yalnızca aşağıdaki JSON şemasına uygun bir liste (array) olarak döndür:
+    [
+      {{
+        "id": 1,
+        "ders": "Ders Adı",
+        "soru": "Soru metni...",
+        "secenekler": [
+          "A) ...",
+          "B) ...",
+          "C) ...",
+          "D) ...",
+          "E) ..."
+        ],
         "dogruCevap": "A",
-        "cozum": "Bu soru dinamik motor tarafından üretilmiştir. Temel kurallar gereği doğru yanıt A şıkkıdır."
-    }
+        "cozum": "Açıklayıcı ve net çözüm gerekçesi..."
+      }}
+    ]
+    """
+
+    try:
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            generation_config={"response_mime_type": "application/json"}
+        )
+        response = model.generate_content(prompt)
+        questions = json.loads(response.text)
+        
+        # ID'leri rastgele benzersiz yapalım
+        for i, q in enumerate(questions):
+            q["id"] = random.randint(10000, 99999) + i
+            
+        return questions
+    except Exception as e:
+        print(f"Gemini API Hatası: {e}")
+        return []
 
 @app.route("/")
 def index():
@@ -53,28 +89,20 @@ def index():
 def get_test():
     data = request.json or {}
     selected_dersler = data.get("dersler", [])
-    total_count = int(data.get("soruSayisi", 10))
+    total_count = int(data.get("soruSayisi", 5))
 
+    # Önce yapay zekadan taze ve yeni sorular üretmeyi dene
+    ai_questions = generate_ai_questions_batch(selected_dersler, total_count)
+
+    if ai_questions and len(ai_questions) > 0:
+        return jsonify({"questions": ai_questions})
+
+    # Eğer API kotası dolarsa veya anahtar girilmemişse yerel havuzdan tamamla (Yedek Plan)
     pool = load_local_questions()
-    filtered = [q for q in pool if q["ders"] in selected_dersler]
+    filtered = [q for q in pool if q.get("ders") in selected_dersler]
     random.shuffle(filtered)
 
-    selected_questions = []
-
-    # 1. Aşama: Yerel havuzdan soruları al
-    if len(filtered) >= total_count:
-        selected_questions = filtered[:total_count]
-    else:
-        selected_questions = list(filtered)
-        eksik = total_count - len(selected_questions)
-        
-        # 2. Aşama: Havuz yetersizse dinamik soru üret (Karma Model)
-        for _ in range(eksik):
-            hedef_ders = random.choice(selected_dersler) if selected_dersler else "Güncel Bilgiler"
-            dynamic_q = generate_ai_question(hedef_ders)
-            selected_questions.append(dynamic_q)
-
-    random.shuffle(selected_questions)
+    selected_questions = filtered[:total_count]
     return jsonify({"questions": selected_questions})
 
 if __name__ == "__main__":
