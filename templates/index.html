@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KPSS Ortaöğretim Test Platformu</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --border: #e2e8f0;
+      --correct: #16a34a;
+      --wrong: #dc2626;
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); padding: 16px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 720px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    h1, h2 { text-align: center; margin-bottom: 20px; }
+    .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .checkbox-item { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; }
+    .input-group { margin-bottom: 16px; }
+    .input-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; }
+    input[type="number"] { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 15px; }
+    button { width: 100%; background: var(--primary); color: #fff; border: none; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    button:hover { background: var(--primary-hover); }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px; font-weight: 600; }
+    .timer { color: var(--wrong); font-size: 18px; }
+    .question-box { font-size: 17px; line-height: 1.5; margin-bottom: 20px; }
+    .options-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+    .option-btn { background: #fff; border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 6px; text-align: left; cursor: pointer; }
+    .option-btn.selected { background: #e0e7ff; border-color: var(--primary); font-weight: 600; }
+    .nav-buttons { display: flex; gap: 10px; }
+    .nav-buttons button { flex: 1; }
+    .result-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .result-table th, .result-table td { border: 1px solid var(--border); padding: 10px; text-align: center; }
+    .result-table th { background: #f1f5f9; }
+    .solution-item { border-bottom: 1px solid var(--border); padding: 14px 0; }
+    .sol-correct { color: var(--correct); font-weight: 600; }
+    .sol-wrong { color: var(--wrong); font-weight: 600; }
+    .hide { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div id="setup-screen">
+    <h1>KPSS Soru Pratiği</h1>
+    <label style="font-weight: 600; display: block; margin-bottom: 8px;">Dersleri Seçin:</label>
+    <div class="checkbox-grid">
+      <label class="checkbox-item"><input type="checkbox" name="ders" value="Türkçe" checked> Türkçe</label>
+      <label class="checkbox-item"><input type="checkbox" name="ders" value="Matematik" checked> Matematik</label>
+      <label class="checkbox-item"><input type="checkbox" name="ders" value="Tarih" checked> Tarih</label>
+      <label class="checkbox-item"><input type="checkbox" name="ders" value="Coğrafya" checked> Coğrafya</label>
+      <label class="checkbox-item"><input type="checkbox" name="ders" value="Vatandaşlık" checked> Vatandaşlık</label>
+      <label class="checkbox-item"><input type="checkbox" name="ders" value="Güncel Bilgiler" checked> Güncel Bilgiler</label>
+    </div>
+
+    <div class="input-group">
+      <label>Soru Sayısı</label>
+      <input type="number" id="soruSayisi" value="5" min="1" max="100">
+    </div>
+
+    <div class="input-group">
+      <label>Süre (Dakika)</label>
+      <input type="number" id="sureDk" value="5" min="1" max="180">
+    </div>
+
+    <button onclick="startTest()">Sınava Başla</button>
+  </div>
+
+  <div id="test-screen" class="hide">
+    <div class="header-bar">
+      <span id="progress-text">Soru 1/10</span>
+      <span class="timer" id="timer-display">00:00</span>
+    </div>
+
+    <div style="font-size: 13px; color: var(--primary); font-weight: bold; margin-bottom: 6px;" id="current-ders">Ders</div>
+    <div class="question-box" id="question-text">Soru metni yükleniyor...</div>
+    <div class="options-list" id="options-container"></div>
+
+    <div class="nav-buttons">
+      <button onclick="prevQuestion()" style="background: #64748b;">Önceki</button>
+      <button onclick="nextQuestion()" id="next-btn">Sonraki</button>
+      <button onclick="finishTest()" style="background: var(--wrong);">Bitir</button>
+    </div>
+  </div>
+
+  <div id="result-screen" class="hide">
+    <h2>Sınav Sonucu ve Analiz</h2>
+    <table class="result-table">
+      <thead>
+        <tr>
+          <th>Ders</th>
+          <th>D</th>
+          <th>Y</th>
+          <th>B</th>
+          <th>Net</th>
+        </tr>
+      </thead>
+      <tbody id="analysis-tbody"></tbody>
+    </table>
+
+    <div id="total-net-display" style="font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 24px;"></div>
+    <h3>Detaylı Çözüm İncelemesi</h3>
+    <div id="solutions-container"></div>
+    <button onclick="location.reload()" style="margin-top: 20px;">Yeni Teste Başla</button>
+  </div>
+</div>
+
+<script>
+let questions = [];
+let currentIndex = 0;
+let userAnswers = {};
+let timerInterval = null;
+let remainingSeconds = 0;
+
+async function startTest() {
+  const selectedDersler = Array.from(document.querySelectorAll('input[name="ders"]:checked')).map(el => el.value);
+  const soruSayisi = document.getElementById("soruSayisi").value;
+  const sureDk = document.getElementById("sureDk").value;
+
+  if (selectedDersler.length === 0) {
+    alert("Lütfen en az bir ders seçin.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/get-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dersler: selectedDersler, soruSayisi: soruSayisi })
+    });
+
+    if (!res.ok) {
+      throw new Error(`Sunucu Hatası: ${res.status} (${res.statusText})`);
+    }
+    
+    const data = await res.json();
+    questions = data.questions;
+
+    if (!questions || questions.length === 0) {
+      alert("Seçilen derslere ait soru bulunamadı!");
+      return;
+    }
+
+    document.getElementById("setup-screen").classList.add("hide");
+    document.getElementById("test-screen").classList.remove("hide");
+
+    remainingSeconds = sureDk * 60;
+    startTimer();
+    renderQuestion();
+
+  } catch (error) {
+    console.error("Hata Detayı:", error);
+    alert("Sorular yüklenirken bir hata oluştu:\n" + error.message);
+  }
+}
+  
+
+function startTimer() {
+  const display = document.getElementById("timer-display");
+  timerInterval = setInterval(() => {
+    let m = Math.floor(remainingSeconds / 60);
+    let s = remainingSeconds % 60;
+    display.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    
+    if (remainingSeconds <= 0) {
+      clearInterval(timerInterval);
+      finishTest();
+    }
+    remainingSeconds--;
+  }, 1000);
+}
+
+function renderQuestion() {
+  const q = questions[currentIndex];
+  document.getElementById("progress-text").innerText = `Soru ${currentIndex + 1} / ${questions.length}`;
+  document.getElementById("current-ders").innerText = q.ders;
+  document.getElementById("question-text").innerText = q.soru;
+
+  const container = document.getElementById("options-container");
+  container.innerHTML = "";
+
+  q.secenekler.forEach(opt => {
+    const key = opt.charAt(0);
+    const btn = document.createElement("button");
+    btn.className = `option-btn ${userAnswers[currentIndex] === key ? 'selected' : ''}`;
+    btn.innerText = opt;
+    btn.onclick = () => {
+      userAnswers[currentIndex] = key;
+      renderQuestion();
+    };
+    container.appendChild(btn);
+  });
+}
+
+function prevQuestion() {
+  if (currentIndex > 0) {
+    currentIndex--;
+    renderQuestion();
+  }
+}
+
+function nextQuestion() {
+  if (currentIndex < questions.length - 1) {
+    currentIndex++;
+    renderQuestion();
+  }
+}
+
+function finishTest() {
+  clearInterval(timerInterval);
+  document.getElementById("test-screen").classList.add("hide");
+  document.getElementById("result-screen").classList.remove("hide");
+
+  let stats = {};
+  questions.forEach((q, idx) => {
+    if (!stats[q.ders]) stats[q.ders] = { D: 0, Y: 0, B: 0 };
+    const ans = userAnswers[idx];
+    if (!ans) {
+      stats[q.ders].B++;
+    } else if (ans === q.dogruCevap) {
+      stats[q.ders].D++;
+    } else {
+      stats[q.ders].Y++;
+    }
+  });
+
+  const tbody = document.getElementById("analysis-tbody");
+  tbody.innerHTML = "";
+  let totalD = 0, totalY = 0, totalB = 0;
+
+  for (let ders in stats) {
+    let d = stats[ders].D;
+    let y = stats[ders].Y;
+    let b = stats[ders].B;
+    let net = (d - (y / 4)).toFixed(2);
+
+    totalD += d; totalY += y; totalB += b;
+    tbody.innerHTML += `<tr><td>${ders}</td><td>${d}</td><td>${y}</td><td>${b}</td><td>${net}</td></tr>`;
+  }
+
+  let totalNet = (totalD - (totalY / 4)).toFixed(2);
+  document.getElementById("total-net-display").innerText = `Toplam Net: ${totalNet} (Doğru: ${totalD}, Yanlış: ${totalY}, Boş: ${totalB})`;
+
+  const solContainer = document.getElementById("solutions-container");
+  solContainer.innerHTML = "";
+
+  questions.forEach((q, idx) => {
+    const userAns = userAnswers[idx] || "Boş";
+    const isCorrect = userAns === q.dogruCevap;
+    
+    solContainer.innerHTML += `
+      <div class="solution-item">
+        <div><strong>Soru ${idx + 1} (${q.ders}):</strong> ${q.soru}</div>
+        <div class="${isCorrect ? 'sol-correct' : 'sol-wrong'}">Cevabınız: ${userAns} | Doğru Cevap: ${q.dogruCevap}</div>
+        <div style="font-size: 14px; color: #475569; margin-top: 4px;"><strong>Çözüm:</strong> ${q.cozum}</div>
+      </div>
+    `;
+  });
+}
+</script>
+</body>
+</html>
