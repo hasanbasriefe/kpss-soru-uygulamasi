@@ -6,9 +6,7 @@ import google.generativeai as genai
 
 app = Flask(__name__)
 
-# Render veya yerel ortamdan API anahtarını alıyoruz
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
@@ -25,41 +23,31 @@ def load_local_questions():
     return []
 
 def generate_ai_questions_batch(selected_dersler, count):
-    """
-    Seçilen derslerden belirlenen adette KPSS Ortaöğretim formatında
-    gerçek ve kaliteli soruları Gemini API ile tek seferde üretir.
-    """
     if not GEMINI_API_KEY:
+        print("Hata: GEMINI_API_KEY bulunamadı!")
         return []
 
     prompt = f"""
-    Sen ÖSYM standartlarında soru hazırlayan kıdemli bir KPSS Ortaöğretim komisyon uzmanısın.
-    Aşağıdaki kurallara göre tam olarak {count} adet soru hazırla.
+    Sen KPSS Ortaöğretim sınav komisyonu uzmanısın.
+    Aşağıdaki kurallara göre EKSİKSİZ TAM OLARAK {count} ADET soru hazırla:
 
     Seçilen Dersler: {', '.join(selected_dersler)}
     
-    Özel Kurallar:
-    1. Sorular KPSS Ortaöğretim seviyesine ve ÖSYM'nin soru mantığına kesinlikle uygun olmalıdır.
-    2. Seçenekler 5 şıklı (A, B, C, D, E) olmalı, sadece tek bir doğru cevap bulunmalıdır.
-    3. Eğer seçilen dersler arasında 'Güncel Bilgiler' varsa; UNESCO Dünya Mirası listeleri, uluslararası kuruluşlar, önemli edebiyat/sanat eserleri, bilim-uzay gelişmeleri ve genel kültür konularından soru üret. Asla uydurma veya 'tanım' gibi jenerik ifadeler kullanma.
-    4. Her soru için doyurucu, öğretici bir çözüm gerekçesi yaz.
-    5. Ürettiğin soruları seçilen derslere dengeli biçimde dağıt.
+    Kurallar:
+    1. Toplam soru sayısı kesinlikle {count} adet olmalıdır. Ne eksik ne fazla.
+    2. Sorular KPSS Ortaöğretim müfredatına uygun, 5 seçenekli (A, B, C, D, E) olmalıdır.
+    3. Güncel Bilgiler dersi için UNESCO, tarihî-kültürel yapılar, edebiyat ve güncel uluslararası konular seçilmelidir.
+    4. Her soru için açıklayıcı bir çözüm metni ekle.
 
-    Cevabını yalnızca ve yalnızca aşağıdaki JSON şemasına uygun bir liste (array) olarak döndür:
+    Yalnızca aşağıdaki şemaya uygun bir JSON dizisi (array) döndür:
     [
       {{
         "id": 1,
         "ders": "Ders Adı",
-        "soru": "Soru metni...",
-        "secenekler": [
-          "A) ...",
-          "B) ...",
-          "C) ...",
-          "D) ...",
-          "E) ..."
-        ],
+        "soru": "Soru metni",
+        "secenekler": ["A) ...", "B) ...", "C) ...", "D) ...", "E) ..."],
         "dogruCevap": "A",
-        "cozum": "Açıklayıcı ve net çözüm gerekçesi..."
+        "cozum": "Çözüm açıklaması"
       }}
     ]
     """
@@ -72,13 +60,12 @@ def generate_ai_questions_batch(selected_dersler, count):
         response = model.generate_content(prompt)
         questions = json.loads(response.text)
         
-        # ID'leri rastgele benzersiz yapalım
         for i, q in enumerate(questions):
             q["id"] = random.randint(10000, 99999) + i
             
         return questions
     except Exception as e:
-        print(f"Gemini API Hatası: {e}")
+        print(f"Gemini API Çağrısı Başarısız: {e}")
         return []
 
 @app.route("/")
@@ -89,21 +76,30 @@ def index():
 def get_test():
     data = request.json or {}
     selected_dersler = data.get("dersler", [])
-    total_count = int(data.get("soruSayisi", 5))
+    
+    # Kullanıcının seçtiği soru sayısını tam sayıya çeviriyoruz
+    try:
+        total_count = int(data.get("soruSayisi", 10))
+    except (ValueError, TypeError):
+        total_count = 10
 
-    # Önce yapay zekadan taze ve yeni sorular üretmeyi dene
-    ai_questions = generate_ai_questions_batch(selected_dersler, total_count)
+    # 1. Öncelik: Gemini API ile taze soru üret
+    questions = generate_ai_questions_batch(selected_dersler, total_count)
 
-    if ai_questions and len(ai_questions) > 0:
-        return jsonify({"questions": ai_questions})
+    # 2. Öncelik (Yedek Plan): API çalışmazsa yerel havuzdan istenen sayıya ulaşana kadar tamamla
+    if not questions or len(questions) == 0:
+        print(f"Uyarı: API yanıt vermedi, yerel havuz kullanılıyor. İstenen adet: {total_count}")
+        pool = load_local_questions()
+        filtered = [q for q in pool if q.get("ders") in selected_dersler] or pool
 
-    # Eğer API kotası dolarsa veya anahtar girilmemişse yerel havuzdan tamamla (Yedek Plan)
-    pool = load_local_questions()
-    filtered = [q for q in pool if q.get("ders") in selected_dersler]
-    random.shuffle(filtered)
+        questions = []
+        # İstenen sayıya ulaşana kadar yerel soruları listeye ekle
+        while len(questions) < total_count and filtered:
+            item = random.choice(filtered).copy()
+            item["id"] = random.randint(1000, 9999)
+            questions.append(item)
 
-    selected_questions = filtered[:total_count]
-    return jsonify({"questions": selected_questions})
+    return jsonify({"questions": questions})
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
