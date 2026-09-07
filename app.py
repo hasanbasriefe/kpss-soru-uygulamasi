@@ -37,29 +37,29 @@ def generate_ai_questions_rest(selected_dersler, count):
 
     dersler_str = ", ".join(selected_dersler)
     prompt = f"""
-    Sen ÖSYM KPSS Ortaöğretim soru hazırlama komisyonundasın.
-    Aşağıdaki derslerden toplam tam olarak {count} adet benzersiz ve kaliteli soru hazırla:
-    Dersler: {dersler_str}
+Sen ÖSYM KPSS Ortaöğretim soru hazırlama komisyonundasın.
+Aşağıdaki derslerden toplam tam olarak {count} adet benzersiz ve kaliteli soru hazırla:
+Dersler: {dersler_str}
 
-    Kurallar:
-    - Klişe olmayan, özgün ve KPSS Ortaöğretim düzeyine tam uygun sorular üret.
-    - Eğer Güncel Bilgiler varsa; Türkiye ve dünya gündemi, UNESCO kültür varlıkları, edebiyat, sanat ve spor gelişmelerinden sor.
-    - 5 seçenek (A, B, C, D, E) ve tek bir doğru cevap olsun.
-    - Yanıtı SADECE geçerli bir JSON dizisi (array) olarak döndür. Başka hiçbir açıklama yazma.
+Kurallar:
+- Klişe olmayan, özgün ve KPSS Ortaöğretim düzeyine tam uygun sorular üret.
+- Eğer Güncel Bilgiler varsa; Türkiye ve dünya gündemi, UNESCO kültür varlıkları, edebiyat, sanat ve spor gelişmelerinden sor.
+- 5 seçenek (A, B, C, D, E) ve tek bir doğru cevap olsun.
+- Yanıtı SADECE geçerli bir JSON dizisi (array) olarak döndür. Başka hiçbir açıklama yazma.
 
-    Format Şablonu:
-    [
-      {{
-        "ders": "Ders Adı",
-        "soru": "Soru metni...",
-        "secenekler": ["A) ...", "B) ...", "C) ...", "D) ...", "E) ..."],
-        "dogruCevap": "A",
-        "cozum": "Açıklayıcı gerekçe..."
-      }}
-    ]
-    """
+Format Şablonu:
+[
+  {{
+    "ders": "Ders Adı",
+    "soru": "Soru metni...",
+    "secenekler": ["A) ...", "B) ...", "C) ...", "D) ...", "E) ..."],
+    "dogruCevap": "A",
+    "cozum": "Açıklayıcı gerekçe..."
+  }}
+]
+"""
 
- url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{
