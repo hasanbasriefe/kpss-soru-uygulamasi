@@ -89,13 +89,12 @@ Format:
         }]
     }
 
-    # Yeni nesil API anahtarlari icin acik olan aktif modeller
     active_models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]
 
     for model in active_models:
         url = get_endpoint_url(model)
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=50)
+            res = requests.post(url, headers=headers, json=payload, timeout=25)
             if res.status_code == 200:
                 res_data = res.json()
                 raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
@@ -108,9 +107,9 @@ Format:
                 print(f"Basarili ({model}): {len(questions)} adet soru uretildi.")
                 return questions
             else:
-                print(f"Model Denemesi ({model}) [{res.status_code}]: {res.text[:100]}")
+                print(f"Model ({model}) [{res.status_code}]: {res.text[:80]}")
         except Exception as e:
-            print(f"Istek hatasi: {e}")
+            print(f"Model deneme hatasi: {e}")
             continue
 
     return []
@@ -121,26 +120,34 @@ def index():
 
 @app.route("/api/get-test", methods=["POST"])
 def get_test():
-    data = request.json or {}
-    selected_dersler = data.get("dersler", ["Güncel Bilgiler"])
     try:
-        total_count = int(data.get("soruSayisi", 5))
-    except:
-        total_count = 5
+        data = request.json or {}
+        selected_dersler = data.get("dersler", ["Güncel Bilgiler"])
+        try:
+            total_count = int(data.get("soruSayisi", 5))
+        except:
+            total_count = 5
 
-    questions = generate_ai_questions_rest(selected_dersler, total_count)
+        # 1. Once yapay zekadan soru iste
+        questions = generate_ai_questions_rest(selected_dersler, total_count)
 
-    if not questions:
-        print(f"API yanit vermedi; yerel havuzdan {total_count} soru tamamlaniyor.")
-        pool = load_local_questions()
-        filtered = [q for q in pool if q.get("ders") in selected_dersler] or pool
-        questions = []
-        while len(questions) < total_count and filtered:
-            item = random.choice(filtered).copy()
-            item["id"] = random.randint(1000, 9999)
-            questions.append(item)
+        # 2. Yanit gelmezse yerel yedek havuzdan guvenli doldur (sonsuz dongu onlendi)
+        if not questions:
+            print(f"API uretmedi; yerel havuz devreye giriyor.")
+            pool = load_local_questions()
+            filtered = [q for q in pool if q.get("ders") in selected_dersler] or pool
 
-    return jsonify({"questions": questions})
+            if filtered:
+                questions = []
+                for i in range(total_count):
+                    item = random.choice(filtered).copy()
+                    item["id"] = random.randint(1000, 9999) + i
+                    questions.append(item)
+
+        return jsonify({"questions": questions or []})
+    except Exception as err:
+        print(f"Kritik Sunucu Hatasi: {err}")
+        return jsonify({"questions": []}), 200
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
