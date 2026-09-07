@@ -59,9 +59,7 @@ def generate_ai_questions_rest(selected_dersler, count):
     ]
     """
 
-    # URL adresi tertemiz, tırnaksız ve parantezsiz olarak ayarlandı
-    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){GEMINI_API_KEY}"
-    
+    url = "[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=)" + GEMINI_API_KEY
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{
@@ -106,7 +104,6 @@ def get_test():
 
     questions = generate_ai_questions_rest(selected_dersler, total_count)
 
-    # API başarısız olursa çökme koruması devreye girer
     if not questions:
         print(f"API yanıt vermedi; yerel havuzdan {total_count} soru tamamlanıyor.")
         pool = load_local_questions()
