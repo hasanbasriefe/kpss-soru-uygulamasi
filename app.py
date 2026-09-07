@@ -59,8 +59,6 @@ Format Şablonu:
 ]
 """
 
-    endpoint = "https://" + "generativelanguage.googleapis.com" + "/v1beta/models/gemini-1.5-flash:generateContent"
-    params = {"key": GEMINI_API_KEY}
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{
@@ -68,27 +66,36 @@ Format Şablonu:
         }]
     }
 
-    try:
-        res = requests.post(endpoint, params=params, headers=headers, json=payload, timeout=45)
-        res_data = res.json()
+    # 404 hatasını önlemek için geçerli REST uç noktalarını sırayla dener
+    endpoints = [
+        f"[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=){GEMINI_API_KEY}",
+        f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=){GEMINI_API_KEY}",
+        f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=){GEMINI_API_KEY}",
+        f"[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=){GEMINI_API_KEY}"
+    ]
 
-        if res.status_code != 200:
-            print(f"Google REST API Hatası ({res.status_code}): {res.text}")
-            return []
+    for ep in endpoints:
+        try:
+            res = requests.post(ep, headers=headers, json=payload, timeout=45)
+            if res.status_code == 200:
+                res_data = res.json()
+                raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+                cleaned_text = clean_json_response(raw_text)
+                questions = json.loads(cleaned_text)
 
-        raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-        cleaned_text = clean_json_response(raw_text)
-        questions = json.loads(cleaned_text)
+                for i, q in enumerate(questions):
+                    q["id"] = random.randint(10000, 99999) + i
 
-        for i, q in enumerate(questions):
-            q["id"] = random.randint(10000, 99999) + i
+                print(f"Başarılı: {len(questions)} adet yapay zeka sorusu üretildi.")
+                return questions
+            else:
+                print(f"Deneme başarısız ({res.status_code}): {res.text[:120]}")
+        except Exception as e:
+            print(f"İstek deneme hatası: {e}")
+            continue
 
-        print(f"Başarılı: {len(questions)} adet yapay zeka sorusu üretildi.")
-        return questions
-
-    except Exception as e:
-        print(f"Soru üretim hatası: {e}")
-        return []
+    print("Tüm uç noktalar denendi, yanıt alınamadı.")
+    return []
 
 @app.route("/")
 def index():
