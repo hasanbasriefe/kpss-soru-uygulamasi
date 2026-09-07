@@ -66,7 +66,8 @@ def generate_ai_questions_rest(selected_dersler, count):
         print("API Hatasi: GEMINI_API_KEY bos!")
         return []
 
-    actual_count = min(count, 5)
+    # Soru sınırını 20 olarak ayarlıyoruz
+    actual_count = min(count, 20)
     dersler_str = ", ".join(selected_dersler)
 
     prompt = f"""
@@ -75,9 +76,10 @@ Asagidaki derslerden toplam tam olarak {actual_count} adet benzersiz soru hazirl
 Dersler: {dersler_str}
 
 Kurallar:
-- KPSS Ortaogretim duzeyine uygun, guncel ve ozgun sorular yaz.
+- KPSS Ortaogretim duzeyine tam uygun sorular uret.
 - 5 secenek (A, B, C, D, E) ve tek dogru cevap olsun.
-- Yaniti SADECE gecerli bir JSON dizisi olarak ver. Markdown disinda yazi yazma.
+- Cozum aciklamalarini 1-2 kisa cumle ile ozet tut.
+- Yaniti SADECE gecerli bir JSON dizisi (array) olarak dondur.
 
 Format:
 [
@@ -101,20 +103,19 @@ Format:
         }],
         "generationConfig": {
             "temperature": 0.7,
-            "maxOutputTokens": 2048
+            "maxOutputTokens": 6500
         }
     }
 
-    # Kotası daha yüksek ve hafif modeller öncelikli
     models_to_try = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.5-flash"
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite"
     ]
 
     for model in models_to_try:
         url = get_endpoint_url(model)
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=25)
+            res = requests.post(url, headers=headers, json=payload, timeout=60)
             if res.status_code == 200:
                 res_data = res.json()
                 raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
@@ -126,7 +127,8 @@ Format:
                     print(f"Basarili ({model}): {len(questions)} adet soru uretildi.")
                     return questions
             elif res.status_code == 429:
-                print(f"Kota siniri (429) - Model: {model}")
+                print(f"Kota siniri (429) alindi: {model}")
+                time.sleep(2)
             else:
                 print(f"Model ({model}) [{res.status_code}]: {res.text[:80]}")
         except Exception as e:
@@ -145,14 +147,14 @@ def get_test():
         data = request.json or {}
         selected_dersler = data.get("dersler", ["Güncel Bilgiler"])
         try:
-            total_count = int(data.get("soruSayisi", 5))
+            total_count = int(data.get("soruSayisi", 20))
         except:
-            total_count = 5
+            total_count = 20
 
         questions = generate_ai_questions_rest(selected_dersler, total_count)
 
         if not questions:
-            print("API kota nedeniyle yanit veremedi, yerel havuz devreye giriyor.")
+            print("API kota veya timeout nedeniyle yanit vermedi; yerel havuzdan tamamlaniyor.")
             pool = load_local_questions()
             filtered = [q for q in pool if q.get("ders") in selected_dersler] or pool
 
