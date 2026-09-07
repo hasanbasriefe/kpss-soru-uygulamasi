@@ -32,10 +32,11 @@ def clean_json_response(raw_text):
 
 def get_pure_api_key():
     val = RAW_KEY.strip()
+    for ch in ["[", "]", "(", ")", "'", '"']:
+        val = val.replace(ch, "")
     if "key=" in val:
         val = val.split("key=")[-1]
-    val = val.replace("[", "").replace("]", "").replace("(", "").replace(")", "").strip()
-    return val
+    return val.strip()
 
 def generate_ai_questions_rest(selected_dersler, count):
     api_key = get_pure_api_key()
@@ -67,7 +68,6 @@ Format:
 ]
 """
 
-    # Yeni Google Auth Keys formatı için x-goog-api-key başlığı kullanılır
     headers = {
         "Content-Type": "application/json",
         "x-goog-api-key": api_key
@@ -78,15 +78,19 @@ Format:
         }]
     }
 
-    models = [
-        "[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent)",
-        "[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent)",
-        "[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent)"
+    # Tarayıcının linke çevirmesini imkansız kılan parça birleştirme
+    proto = "https"
+    host = "generativelanguage.googleapis.com"
+    paths = [
+        "v1beta/models/gemini-1.5-flash:generateContent",
+        "v1/models/gemini-1.5-flash:generateContent",
+        "v1beta/models/gemini-2.0-flash-exp:generateContent"
     ]
 
-    for url in models:
+    for p in paths:
+        target_url = f"{proto}://{host}/{p}"
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=45)
+            res = requests.post(target_url, headers=headers, json=payload, timeout=45)
             if res.status_code == 200:
                 res_data = res.json()
                 raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
