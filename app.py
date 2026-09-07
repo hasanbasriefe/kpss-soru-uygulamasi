@@ -2,6 +2,7 @@ import os
 import json
 import random
 import re
+import time
 import requests
 from flask import Flask, render_template, request, jsonify
 
@@ -21,15 +22,27 @@ def load_local_questions():
             print(f"JSON Okuma Hatasi: {e}")
     return []
 
-def clean_json_response(raw_text):
+def extract_json_array(raw_text):
+    """Metin içindeki geçerli JSON dizisini ([...]) çeker, bozuk uç kısımları temizler."""
     text = raw_text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    return text.strip()
+    match = re.search(r"\[\s*\{.*\}\s*\]", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except:
+            pass
+    
+    # Markdown blok temizliği
+    if "```json" in text:
+        text = text.split("```json")[-1].split("```")[0]
+    elif "```" in text:
+        text = text.split("```")[1]
+    
+    try:
+        return json.loads(text.strip())
+    except Exception as e:
+        print(f"JSON parse hatasi: {e}")
+        return []
 
 def get_clean_key():
     val = str(RAW_KEY).strip()
@@ -55,17 +68,19 @@ def generate_ai_questions_rest(selected_dersler, count):
         print("API Hatasi: GEMINI_API_KEY bos!")
         return []
 
+    # Kota ve token limitine takılmamak için tek seferde en fazla 10 soru üret
+    actual_count = min(count, 10)
     dersler_str = ", ".join(selected_dersler)
+
     prompt = f"""
 Sen OSYM KPSS Ortaogretim soru hazirlama komisyonundasin.
-Asagidaki derslerden toplam tam olarak {count} adet benzersiz soru hazirla:
+Asagidaki derslerden toplam tam olarak {actual_count} adet benzersiz soru hazirla:
 Dersler: {dersler_str}
 
 Kurallar:
-- KPSS Ortaogretim duzeyine tam uygun sorular uret.
-- Eger Guncel Bilgiler varsa Turkiye ve dunya gundeminden sor.
+- KPSS Ortaogretim duzeyine uygun, guncel ve ozgun sorular yaz.
 - 5 secenek (A, B, C, D, E) ve tek dogru cevap olsun.
-- Yaniti SADECE gecerli bir JSON dizisi (array) olarak dondur.
+- Yaniti SADECE gecerli bir JSON dizisi olarak ver. Markdown disinda yazi yazma.
 
 Format:
 [
@@ -86,31 +101,39 @@ Format:
     payload = {
         "contents": [{
             "parts": [{"text": prompt}]
-        }]
+        }],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 4096
+        }
     }
 
-    active_models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]
+    models_to_try = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
 
-    for model in active_models:
+    for model in models_to_try:
         url = get_endpoint_url(model)
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=25)
-            if res.status_code == 200:
-                res_data = res.json()
-                raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-                cleaned_text = clean_json_response(raw_text)
-                questions = json.loads(cleaned_text)
+        for attempt in range(2):
+            try:
+                res = requests.post(url, headers=headers, json=payload, timeout=30)
+                if res.status_code == 200:
+                    res_data = res.json()
+                    raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+                    questions = extract_json_array(raw_text)
 
-                for i, q in enumerate(questions):
-                    q["id"] = random.randint(10000, 99999) + i
-
-                print(f"Basarili ({model}): {len(questions)} adet soru uretildi.")
-                return questions
-            else:
-                print(f"Model ({model}) [{res.status_code}]: {res.text[:80]}")
-        except Exception as e:
-            print(f"Model deneme hatasi: {e}")
-            continue
+                    if questions:
+                        for i, q in enumerate(questions):
+                            q["id"] = random.randint(10000, 99999) + i
+                        print(f"Basarili ({model}): {len(questions)} adet soru uretildi.")
+                        return questions
+                elif res.status_code == 429:
+                    print(f"Kota siniri (429) alindi, 2 saniye bekleniyor... ({model})")
+                    time.sleep(2)
+                else:
+                    print(f"Model ({model}) [{res.status_code}]: {res.text[:80]}")
+                    break
+            except Exception as e:
+                print(f"Istek hatasi ({model}): {e}")
+                break
 
     return []
 
@@ -128,12 +151,12 @@ def get_test():
         except:
             total_count = 5
 
-        # 1. Once yapay zekadan soru iste
+        # 1. Yapay zekadan taze soru iste
         questions = generate_ai_questions_rest(selected_dersler, total_count)
 
-        # 2. Yanit gelmezse yerel yedek havuzdan guvenli doldur (sonsuz dongu onlendi)
+        # 2. Kota dolmussa yerel havuzdan tamamla
         if not questions:
-            print(f"API uretmedi; yerel havuz devreye giriyor.")
+            print("API kota nedeniyle yanit veremedi, yerel havuz devreye giriyor.")
             pool = load_local_questions()
             filtered = [q for q in pool if q.get("ders") in selected_dersler] or pool
 
@@ -146,7 +169,7 @@ def get_test():
 
         return jsonify({"questions": questions or []})
     except Exception as err:
-        print(f"Kritik Sunucu Hatasi: {err}")
+        print(f"Sunucu Hatasi: {err}")
         return jsonify({"questions": []}), 200
 
 if __name__ == "__main__":
