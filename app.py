@@ -32,7 +32,7 @@ def clean_json_response(raw_text):
     return text.strip()
 
 def get_clean_key():
-    val = RAW_KEY.strip()
+    val = str(RAW_KEY).strip()
     match = re.search(r"AQ\.[a-zA-Z0-9_\-]+", val)
     if match:
         return match.group(0)
@@ -41,6 +41,14 @@ def get_clean_key():
     if "key=" in val:
         val = val.split("key=")[-1]
     return val.strip()
+
+def get_api_url():
+    # Tarayicinin Markdown linkine donusturmesini engelleyen karakter birlestirme
+    scheme = "".join([chr(104), chr(116), chr(116), chr(112), chr(115)])  # https
+    colon_slash = chr(58) + chr(47) + chr(47)                           # ://
+    host = "generativelanguage.googleapis.com"
+    endpoint = "v1beta/models/gemini-2.5-flash:generateContent"
+    return f"{scheme}{colon_slash}{host}/{endpoint}"
 
 def generate_ai_questions_rest(selected_dersler, count):
     api_key = get_clean_key()
@@ -82,7 +90,7 @@ Format:
         }]
     }
 
-    url = "[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent)"
+    url = get_api_url()
 
     try:
         res = requests.post(url, headers=headers, json=payload, timeout=50)
