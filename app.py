@@ -38,10 +38,39 @@ def get_pure_api_key():
         val = val.split("key=")[-1]
     return val.strip()
 
+def get_active_model(api_key):
+    """Hesabinizda generateContent destekleyen ilk aktif modeli otomatik bulur."""
+    url = "[https://generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)"
+    headers = {"x-goog-api-key": api_key}
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            models_data = res.json().get("models", [])
+            for m in models_data:
+                methods = m.get("supportedGenerationMethods", [])
+                name = m.get("name", "")
+                if "generateContent" in methods and "flash" in name.lower():
+                    print(f"Aktif Model Secildi: {name}")
+                    return name
+            # Flash bulunamazsa ilk generateContent modelini sec
+            for m in models_data:
+                if "generateContent" in m.get("supportedGenerationMethods", []):
+                    return m.get("name")
+        else:
+            print(f"Model listesi alinamadi ({res.status_code}): {res.text[:100]}")
+    except Exception as e:
+        print(f"Model sorgulama hatasi: {e}")
+    return None
+
 def generate_ai_questions_rest(selected_dersler, count):
     api_key = get_pure_api_key()
     if not api_key:
         print("API Hatasi: GEMINI_API_KEY bos!")
+        return []
+
+    active_model = get_active_model(api_key)
+    if not active_model:
+        print("Kullanilabilir aktif yapay zeka modeli bulunamadi!")
         return []
 
     dersler_str = ", ".join(selected_dersler)
@@ -78,37 +107,24 @@ Format:
         }]
     }
 
-    proto = "https"
-    host = "generativelanguage.googleapis.com"
-    
-    # 2026 guncel Google AI Studio aktif model listesi
-    paths = [
-        "v1beta/models/gemini-2.5-flash:generateContent",
-        "v1beta/models/gemini-2.0-flash-001:generateContent",
-        "v1beta/models/gemini-2.5-pro:generateContent",
-        "v1beta/models/gemini-flash-latest:generateContent"
-    ]
+    url = f"[https://generativelanguage.googleapis.com/v1beta/](https://generativelanguage.googleapis.com/v1beta/){active_model}:generateContent"
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=50)
+        if res.status_code == 200:
+            res_data = res.json()
+            raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+            cleaned_text = clean_json_response(raw_text)
+            questions = json.loads(cleaned_text)
 
-    for p in paths:
-        target_url = f"{proto}://{host}/{p}"
-        try:
-            res = requests.post(target_url, headers=headers, json=payload, timeout=45)
-            if res.status_code == 200:
-                res_data = res.json()
-                raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-                cleaned_text = clean_json_response(raw_text)
-                questions = json.loads(cleaned_text)
+            for i, q in enumerate(questions):
+                q["id"] = random.randint(10000, 99999) + i
 
-                for i, q in enumerate(questions):
-                    q["id"] = random.randint(10000, 99999) + i
-
-                print(f"Basarili ({p}): {len(questions)} adet soru uretildi.")
-                return questions
-            else:
-                print(f"Model Denemesi ({p}) [{res.status_code}]: {res.text[:90]}")
-        except Exception as e:
-            print(f"Istek hatasi: {e}")
-            continue
+            print(f"Basarili: {len(questions)} adet soru uretildi.")
+            return questions
+        else:
+            print(f"Soru Uretim Hatasi [{res.status_code}]: {res.text[:120]}")
+    except Exception as e:
+        print(f"Istek hatasi: {e}")
 
     return []
 
