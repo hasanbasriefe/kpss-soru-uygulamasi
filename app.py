@@ -17,7 +17,7 @@ def load_local_questions():
             with open(JSON_PATH, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"JSON Okuma Hatası: {e}")
+            print(f"JSON Okuma Hatasi: {e}")
     return []
 
 def clean_json_response(raw_text):
@@ -32,29 +32,34 @@ def clean_json_response(raw_text):
 
 def generate_ai_questions_rest(selected_dersler, count):
     if not GEMINI_API_KEY:
-        print("API Hatası: GEMINI_API_KEY bulunamadı!")
+        print("API Hatasi: GEMINI_API_KEY bulunamadi!")
         return []
+
+    # Olası Markdown ve parantez kalıntılarını temizler
+    clean_key = GEMINI_API_KEY.replace("[", "").replace("]", "").replace("(", "").replace(")", "").strip()
+    if "key=" in clean_key:
+        clean_key = clean_key.split("key=")[-1]
 
     dersler_str = ", ".join(selected_dersler)
     prompt = f"""
-Sen ÖSYM KPSS Ortaöğretim soru hazırlama komisyonundasın.
-Aşağıdaki derslerden toplam tam olarak {count} adet benzersiz ve kaliteli soru hazırla:
+Sen OSYM KPSS Ortaogretim soru hazirlama komisyonundasin.
+Asagidaki derslerden toplam tam olarak {count} adet benzersiz soru hazirla:
 Dersler: {dersler_str}
 
 Kurallar:
-- Klişe olmayan, özgün ve KPSS Ortaöğretim düzeyine tam uygun sorular üret.
-- Eğer Güncel Bilgiler varsa; Türkiye ve dünya gündemi, UNESCO kültür varlıkları, edebiyat, sanat ve spor gelişmelerinden sor.
-- 5 seçenek (A, B, C, D, E) ve tek bir doğru cevap olsun.
-- Yanıtı SADECE geçerli bir JSON dizisi (array) olarak döndür. Başka hiçbir açıklama yazma.
+- KPSS Ortaogretim duzeyine tam uygun sorular uret.
+- Eger Guncel Bilgiler varsa Turkiye ve dunya gundeminden sor.
+- 5 secenek (A, B, C, D, E) ve tek dogru cevap olsun.
+- Yaniti SADECE gecerli bir JSON dizisi (array) olarak dondur.
 
-Format Şablonu:
+Format:
 [
   {{
-    "ders": "Ders Adı",
+    "ders": "Ders Adi",
     "soru": "Soru metni...",
     "secenekler": ["A) ...", "B) ...", "C) ...", "D) ...", "E) ..."],
     "dogruCevap": "A",
-    "cozum": "Açıklayıcı gerekçe..."
+    "cozum": "Aciklama..."
   }}
 ]
 """
@@ -66,17 +71,10 @@ Format Şablonu:
         }]
     }
 
-    # 404 hatasını önlemek için geçerli REST uç noktalarını sırayla dener
-  base_url = "https://" + "generativelanguage.googleapis.com"
-    clean_key = GEMINI_API_KEY.replace("[", "").replace("]", "").replace("(", "").replace(")", "").strip()
-    if "key=" in clean_key:
-        clean_key = clean_key.split("key=")[-1]
-
     endpoints = [
-        f"{base_url}/v1/models/gemini-1.5-flash:generateContent?key={clean_key}",
-        f"{base_url}/v1beta/models/gemini-1.5-flash-latest:generateContent?key={clean_key}",
-        f"{base_url}/v1beta/models/gemini-2.0-flash-exp:generateContent?key={clean_key}",
-        f"{base_url}/v1/models/gemini-1.5-pro:generateContent?key={clean_key}"
+        f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){clean_key}",
+        f"[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=){clean_key}",
+        f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=){clean_key}"
     ]
 
     for ep in endpoints:
@@ -91,15 +89,14 @@ Format Şablonu:
                 for i, q in enumerate(questions):
                     q["id"] = random.randint(10000, 99999) + i
 
-                print(f"Başarılı: {len(questions)} adet yapay zeka sorusu üretildi.")
+                print(f"Basarili: {len(questions)} adet soru uretildi.")
                 return questions
             else:
-                print(f"Deneme başarısız ({res.status_code}): {res.text[:120]}")
+                print(f"Deneme basarisiz ({res.status_code}): {res.text[:100]}")
         except Exception as e:
-            print(f"İstek deneme hatası: {e}")
+            print(f"Istek hatasi: {e}")
             continue
 
-    print("Tüm uç noktalar denendi, yanıt alınamadı.")
     return []
 
 @app.route("/")
@@ -118,7 +115,7 @@ def get_test():
     questions = generate_ai_questions_rest(selected_dersler, total_count)
 
     if not questions:
-        print(f"API yanıt vermedi; yerel havuzdan {total_count} soru tamamlanıyor.")
+        print(f"API yanit vermedi; yerel havuzdan {total_count} soru tamamlaniyor.")
         pool = load_local_questions()
         filtered = [q for q in pool if q.get("ders") in selected_dersler] or pool
         questions = []
