@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import re
 import requests
 from flask import Flask, render_template, request, jsonify
 
@@ -30,59 +31,21 @@ def clean_json_response(raw_text):
         text = text[:-3]
     return text.strip()
 
-def sanitize_url(raw_url):
-    u = str(raw_url).strip()
-    if "[" in u and "](" in u:
-        u = u.split("](")[-1].replace(")", "")
-    for ch in ["[", "]", "(", ")", "'", '"']:
-        u = u.replace(ch, "")
-    return u.strip()
-
-def get_pure_api_key():
+def get_clean_key():
     val = RAW_KEY.strip()
-    for ch in ["[", "]", "(", ")", "'", '"']:
+    match = re.search(r"AQ\.[a-zA-Z0-9_\-]+", val)
+    if match:
+        return match.group(0)
+    for ch in ["[", "]", "(", ")", "'", '"', " "]:
         val = val.replace(ch, "")
     if "key=" in val:
         val = val.split("key=")[-1]
     return val.strip()
 
-def get_active_model(api_key):
-    # Parçalı birleştirme ile link algılaması engellenir
-    p1 = "htt" + "ps://"
-    p2 = "generative" + "language" + "[.googleapis.com/](https://.googleapis.com/)"
-    p3 = "v1beta/models"
-    raw_url = p1 + p2 + p3
-    clean_url = sanitize_url(raw_url)
-
-    headers = {"x-goog-api-key": api_key}
-    try:
-        res = requests.get(clean_url, headers=headers, timeout=10)
-        if res.status_code == 200:
-            models_data = res.json().get("models", [])
-            for m in models_data:
-                methods = m.get("supportedGenerationMethods", [])
-                name = m.get("name", "")
-                if "generateContent" in methods and "flash" in name.lower():
-                    print(f"Aktif Model Secildi: {name}")
-                    return name
-            for m in models_data:
-                if "generateContent" in m.get("supportedGenerationMethods", []):
-                    return m.get("name")
-        else:
-            print(f"Model listesi alinamadi ({res.status_code}): {res.text[:100]}")
-    except Exception as e:
-        print(f"Model sorgulama hatasi: {e}")
-    return None
-
 def generate_ai_questions_rest(selected_dersler, count):
-    api_key = get_pure_api_key()
+    api_key = get_clean_key()
     if not api_key:
         print("API Hatasi: GEMINI_API_KEY bos!")
-        return []
-
-    active_model = get_active_model(api_key)
-    if not active_model:
-        print("Kullanilabilir aktif yapay zeka modeli bulunamadi!")
         return []
 
     dersler_str = ", ".join(selected_dersler)
@@ -119,14 +82,10 @@ Format:
         }]
     }
 
-    # Model adına göre uç nokta adresi oluşturma ve temizleme
-    p1 = "htt" + "ps://"
-    p2 = "generative" + "language" + "[.googleapis.com/v1beta/](https://.googleapis.com/v1beta/)"
-    target = p1 + p2 + str(active_model).replace("models/", "") + ":generateContent"
-    clean_target = sanitize_url(target)
+    url = "[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent)"
 
     try:
-        res = requests.post(clean_target, headers=headers, json=payload, timeout=50)
+        res = requests.post(url, headers=headers, json=payload, timeout=50)
         if res.status_code == 200:
             res_data = res.json()
             raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
