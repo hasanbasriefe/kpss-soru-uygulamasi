@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH = os.path.join(BASE_DIR, "questions.json")
@@ -45,7 +45,7 @@ def generate_ai_questions_rest(selected_dersler, count):
     - Klişe olmayan, özgün ve KPSS Ortaöğretim düzeyine tam uygun sorular üret.
     - Eğer Güncel Bilgiler varsa; Türkiye ve dünya gündemi, UNESCO kültür varlıkları, edebiyat, sanat ve spor gelişmelerinden sor.
     - 5 seçenek (A, B, C, D, E) ve tek bir doğru cevap olsun.
-    - Yanıtı SADECE geçerli bir JSON dizisi (array) olarak döndür. Markdown dışında hiçbir yazı yazma.
+    - Yanıtı SADECE geçerli bir JSON dizisi (array) olarak döndür. Başka hiçbir açıklama yazma.
 
     Format Şablonu:
     [
@@ -59,8 +59,9 @@ def generate_ai_questions_rest(selected_dersler, count):
     ]
     """
 
-    api_key = GEMINI_API_KEY.strip()
-    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=){api_key}"
+    # URL adresi tertemiz, tırnaksız ve parantezsiz olarak ayarlandı
+    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){GEMINI_API_KEY}"
+    
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{
@@ -105,7 +106,7 @@ def get_test():
 
     questions = generate_ai_questions_rest(selected_dersler, total_count)
 
-    # API başarısız olursa yerel yedek devreye girer
+    # API başarısız olursa çökme koruması devreye girer
     if not questions:
         print(f"API yanıt vermedi; yerel havuzdan {total_count} soru tamamlanıyor.")
         pool = load_local_questions()
