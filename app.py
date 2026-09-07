@@ -67,22 +67,26 @@ Format:
 ]
 """
 
-    headers = {"Content-Type": "application/json"}
+    # Yeni Google Auth Keys formatı için x-goog-api-key başlığı kullanılır
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key
+    }
     payload = {
         "contents": [{
             "parts": [{"text": prompt}]
         }]
     }
 
-    # URL'yi parcali birlestirerek editörün linke cevirmesini engelliyoruz
-    domain = "generativelanguage.googleapis.com"
-    models = ["v1beta/models/gemini-1.5-flash", "v1/models/gemini-1.5-flash", "v1beta/models/gemini-2.0-flash-exp"]
+    models = [
+        "[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent)",
+        "[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent)",
+        "[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent)"
+    ]
 
-    for m in models:
-        url = "https://" + domain + "/" + m + ":generateContent"
-        params = {"key": api_key}
+    for url in models:
         try:
-            res = requests.post(url, params=params, headers=headers, json=payload, timeout=45)
+            res = requests.post(url, headers=headers, json=payload, timeout=45)
             if res.status_code == 200:
                 res_data = res.json()
                 raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
@@ -95,7 +99,7 @@ Format:
                 print(f"Basarili: {len(questions)} adet soru uretildi.")
                 return questions
             else:
-                print(f"Deneme basarisiz ({res.status_code}): {res.text[:100]}")
+                print(f"Deneme basarisiz ({res.status_code}): {res.text[:120]}")
         except Exception as e:
             print(f"Istek hatasi: {e}")
             continue
