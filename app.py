@@ -30,6 +30,14 @@ def clean_json_response(raw_text):
         text = text[:-3]
     return text.strip()
 
+def sanitize_url(raw_url):
+    u = str(raw_url).strip()
+    if "[" in u and "](" in u:
+        u = u.split("](")[-1].replace(")", "")
+    for ch in ["[", "]", "(", ")", "'", '"']:
+        u = u.replace(ch, "")
+    return u.strip()
+
 def get_pure_api_key():
     val = RAW_KEY.strip()
     for ch in ["[", "]", "(", ")", "'", '"']:
@@ -39,11 +47,16 @@ def get_pure_api_key():
     return val.strip()
 
 def get_active_model(api_key):
-    """Hesabinizda generateContent destekleyen ilk aktif modeli otomatik bulur."""
-    url = "[https://generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)"
+    # Parçalı birleştirme ile link algılaması engellenir
+    p1 = "htt" + "ps://"
+    p2 = "generative" + "language" + "[.googleapis.com/](https://.googleapis.com/)"
+    p3 = "v1beta/models"
+    raw_url = p1 + p2 + p3
+    clean_url = sanitize_url(raw_url)
+
     headers = {"x-goog-api-key": api_key}
     try:
-        res = requests.get(url, headers=headers, timeout=10)
+        res = requests.get(clean_url, headers=headers, timeout=10)
         if res.status_code == 200:
             models_data = res.json().get("models", [])
             for m in models_data:
@@ -52,7 +65,6 @@ def get_active_model(api_key):
                 if "generateContent" in methods and "flash" in name.lower():
                     print(f"Aktif Model Secildi: {name}")
                     return name
-            # Flash bulunamazsa ilk generateContent modelini sec
             for m in models_data:
                 if "generateContent" in m.get("supportedGenerationMethods", []):
                     return m.get("name")
@@ -107,9 +119,14 @@ Format:
         }]
     }
 
-    url = f"[https://generativelanguage.googleapis.com/v1beta/](https://generativelanguage.googleapis.com/v1beta/){active_model}:generateContent"
+    # Model adına göre uç nokta adresi oluşturma ve temizleme
+    p1 = "htt" + "ps://"
+    p2 = "generative" + "language" + "[.googleapis.com/v1beta/](https://.googleapis.com/v1beta/)"
+    target = p1 + p2 + str(active_model).replace("models/", "") + ":generateContent"
+    clean_target = sanitize_url(target)
+
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=50)
+        res = requests.post(clean_target, headers=headers, json=payload, timeout=50)
         if res.status_code == 200:
             res_data = res.json()
             raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
