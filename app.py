@@ -59,7 +59,8 @@ Format Şablonu:
 ]
 """
 
-    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){GEMINI_API_KEY}"
+    endpoint = "https://" + "generativelanguage.googleapis.com" + "/v1beta/models/gemini-1.5-flash:generateContent"
+    params = {"key": GEMINI_API_KEY}
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{
@@ -68,7 +69,7 @@ Format Şablonu:
     }
 
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=45)
+        res = requests.post(endpoint, params=params, headers=headers, json=payload, timeout=45)
         res_data = res.json()
 
         if res.status_code != 200:
