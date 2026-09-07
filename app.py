@@ -42,12 +42,11 @@ def get_clean_key():
         val = val.split("key=")[-1]
     return val.strip()
 
-def get_api_url():
-    # Tarayicinin Markdown linkine donusturmesini engelleyen karakter birlestirme
-    scheme = "".join([chr(104), chr(116), chr(116), chr(112), chr(115)])  # https
-    colon_slash = chr(58) + chr(47) + chr(47)                           # ://
+def get_endpoint_url(model_name):
+    scheme = "".join([chr(104), chr(116), chr(116), chr(112), chr(115)])
+    colon_slash = chr(58) + chr(47) + chr(47)
     host = "generativelanguage.googleapis.com"
-    endpoint = "v1beta/models/gemini-2.5-flash:generateContent"
+    endpoint = f"v1beta/models/{model_name}:generateContent"
     return f"{scheme}{colon_slash}{host}/{endpoint}"
 
 def generate_ai_questions_rest(selected_dersler, count):
@@ -90,25 +89,29 @@ Format:
         }]
     }
 
-    url = get_api_url()
+    # Yeni nesil API anahtarlari icin acik olan aktif modeller
+    active_models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]
 
-    try:
-        res = requests.post(url, headers=headers, json=payload, timeout=50)
-        if res.status_code == 200:
-            res_data = res.json()
-            raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-            cleaned_text = clean_json_response(raw_text)
-            questions = json.loads(cleaned_text)
+    for model in active_models:
+        url = get_endpoint_url(model)
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=50)
+            if res.status_code == 200:
+                res_data = res.json()
+                raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+                cleaned_text = clean_json_response(raw_text)
+                questions = json.loads(cleaned_text)
 
-            for i, q in enumerate(questions):
-                q["id"] = random.randint(10000, 99999) + i
+                for i, q in enumerate(questions):
+                    q["id"] = random.randint(10000, 99999) + i
 
-            print(f"Basarili: {len(questions)} adet soru uretildi.")
-            return questions
-        else:
-            print(f"Soru Uretim Hatasi [{res.status_code}]: {res.text[:120]}")
-    except Exception as e:
-        print(f"Istek hatasi: {e}")
+                print(f"Basarili ({model}): {len(questions)} adet soru uretildi.")
+                return questions
+            else:
+                print(f"Model Denemesi ({model}) [{res.status_code}]: {res.text[:100]}")
+        except Exception as e:
+            print(f"Istek hatasi: {e}")
+            continue
 
     return []
 
