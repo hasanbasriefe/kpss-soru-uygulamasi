@@ -78,13 +78,13 @@ Format:
         }]
     }
 
-    # Tarayıcının linke çevirmesini imkansız kılan parça birleştirme
     proto = "https"
     host = "generativelanguage.googleapis.com"
     paths = [
-        "v1beta/models/gemini-1.5-flash:generateContent",
-        "v1/models/gemini-1.5-flash:generateContent",
-        "v1beta/models/gemini-2.0-flash-exp:generateContent"
+        "v1beta/models/gemini-2.0-flash:generateContent",
+        "v1beta/models/gemini-1.5-flash-002:generateContent",
+        "v1beta/models/gemini-1.5-flash-001:generateContent",
+        "v1beta/models/gemini-1.5-pro-002:generateContent"
     ]
 
     for p in paths:
@@ -103,7 +103,7 @@ Format:
                 print(f"Basarili: {len(questions)} adet soru uretildi.")
                 return questions
             else:
-                print(f"Deneme basarisiz ({res.status_code}): {res.text[:120]}")
+                print(f"Deneme basarisiz ({p}) [{res.status_code}]: {res.text[:100]}")
         except Exception as e:
             print(f"Istek hatasi: {e}")
             continue
