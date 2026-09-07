@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+RAW_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH = os.path.join(BASE_DIR, "questions.json")
@@ -30,15 +30,18 @@ def clean_json_response(raw_text):
         text = text[:-3]
     return text.strip()
 
-def generate_ai_questions_rest(selected_dersler, count):
-    if not GEMINI_API_KEY:
-        print("API Hatasi: GEMINI_API_KEY bulunamadi!")
-        return []
+def get_pure_api_key():
+    val = RAW_KEY.strip()
+    if "key=" in val:
+        val = val.split("key=")[-1]
+    val = val.replace("[", "").replace("]", "").replace("(", "").replace(")", "").strip()
+    return val
 
-    # Olası Markdown ve parantez kalıntılarını temizler
-    clean_key = GEMINI_API_KEY.replace("[", "").replace("]", "").replace("(", "").replace(")", "").strip()
-    if "key=" in clean_key:
-        clean_key = clean_key.split("key=")[-1]
+def generate_ai_questions_rest(selected_dersler, count):
+    api_key = get_pure_api_key()
+    if not api_key:
+        print("API Hatasi: GEMINI_API_KEY bos!")
+        return []
 
     dersler_str = ", ".join(selected_dersler)
     prompt = f"""
@@ -71,15 +74,15 @@ Format:
         }]
     }
 
-    endpoints = [
-        f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){clean_key}",
-        f"[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=){clean_key}",
-        f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=){clean_key}"
-    ]
+    # URL'yi parcali birlestirerek editörün linke cevirmesini engelliyoruz
+    domain = "generativelanguage.googleapis.com"
+    models = ["v1beta/models/gemini-1.5-flash", "v1/models/gemini-1.5-flash", "v1beta/models/gemini-2.0-flash-exp"]
 
-    for ep in endpoints:
+    for m in models:
+        url = "https://" + domain + "/" + m + ":generateContent"
+        params = {"key": api_key}
         try:
-            res = requests.post(ep, headers=headers, json=payload, timeout=45)
+            res = requests.post(url, params=params, headers=headers, json=payload, timeout=45)
             if res.status_code == 200:
                 res_data = res.json()
                 raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
