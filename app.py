@@ -80,11 +80,13 @@ Format:
 
     proto = "https"
     host = "generativelanguage.googleapis.com"
+    
+    # 2026 guncel Google AI Studio aktif model listesi
     paths = [
-        "v1beta/models/gemini-2.0-flash:generateContent",
-        "v1beta/models/gemini-1.5-flash-002:generateContent",
-        "v1beta/models/gemini-1.5-flash-001:generateContent",
-        "v1beta/models/gemini-1.5-pro-002:generateContent"
+        "v1beta/models/gemini-2.5-flash:generateContent",
+        "v1beta/models/gemini-2.0-flash-001:generateContent",
+        "v1beta/models/gemini-2.5-pro:generateContent",
+        "v1beta/models/gemini-flash-latest:generateContent"
     ]
 
     for p in paths:
@@ -100,10 +102,10 @@ Format:
                 for i, q in enumerate(questions):
                     q["id"] = random.randint(10000, 99999) + i
 
-                print(f"Basarili: {len(questions)} adet soru uretildi.")
+                print(f"Basarili ({p}): {len(questions)} adet soru uretildi.")
                 return questions
             else:
-                print(f"Deneme basarisiz ({p}) [{res.status_code}]: {res.text[:100]}")
+                print(f"Model Denemesi ({p}) [{res.status_code}]: {res.text[:90]}")
         except Exception as e:
             print(f"Istek hatasi: {e}")
             continue
